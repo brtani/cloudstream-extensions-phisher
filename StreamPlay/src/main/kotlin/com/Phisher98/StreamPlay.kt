@@ -1,7 +1,6 @@
 package com.phisher98
 
 import android.content.SharedPreferences
-import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.edit
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -202,7 +201,6 @@ open class StreamPlay(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val SubtitlesAPI = "https://opensubtitles-v3.strem.io"
         const val WyZIESUBAPI = "https://sub.wyzie.ru"
         const val RiveStreamAPI = "https://rivestream.org"
-        const val PrimeSrcApi = "https://primesrc.me"
         const val thrirdAPI = BuildConfig.SUPERSTREAM_THIRD_API
         const val fourthAPI = BuildConfig.SUPERSTREAM_FOURTH_API
         const val NuvFeb = BuildConfig.NuvFeb
@@ -216,14 +214,12 @@ open class StreamPlay(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val cinemaOSApi = "https://cinemaos.tech"
         const val mp4hydra = "https://mp4hydra.org"
         const val vidfastProApi = "https://vidfast.pro"
-        const val vidPlusApi = "https://player.vidplus.pro"
         const val videasyAPI = "https://api.videasy.net"
         const val yFlix = "https://yflix.to"
         const val moviesClubApi = "https://moviesapi.club"
         const val cinemacity = "https://cinemacity.cc"
         const val embedmaster = "https://embedmaster.link"
         const val hexaSU = "https://theemoviedb.hexa.su"
-        const val flixindia = "https://m.flixindia.xyz"
         const val sudatchi = "https://sudatchi.com"
         const val m4uhdAPI = "https://ww3.m4ufree.lat"
         const val mappleAPI = "https://mapple.uk"
@@ -231,7 +227,7 @@ open class StreamPlay(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val kuudere = "https://kuudere.to"
         const val levidia = "https://www.levidia.ch"
         const val xpassAPI = "https://play.xpass.top"
-
+        const val vaplayer = "https://streamdata.vaplayer.ru"
         fun getType(t: String?): TvType {
             return when (t) {
                 "movie" -> TvType.Movie
@@ -646,7 +642,6 @@ open class StreamPlay(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,

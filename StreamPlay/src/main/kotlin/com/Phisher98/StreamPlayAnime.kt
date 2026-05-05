@@ -3,7 +3,6 @@ package com.phisher98
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.CommonActivity.activity
 import com.lagradost.cloudstream3.DubStatus
-import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -177,7 +176,7 @@ class StreamPlayAnime : MainAPI() {
         val tmdbid = animeMetaData?.mappings?.themoviedbId?.toIntOrNull()
         val kitsuid = animeMetaData?.mappings?.kitsuid
 
-        val type = if (data.format.contains("Movie",ignoreCase = true)) TvType.Movie else TvType.TvSeries
+        val type = if (data.format.contains("Movie", ignoreCase = true)) TvType.Movie else TvType.TvSeries
 
         val logoUrl = fetchTmdbLogoUrl(
             tmdbAPI = "https://api.themoviedb.org/3",
@@ -186,7 +185,26 @@ class StreamPlayAnime : MainAPI() {
             tmdbId = tmdbid,
             appLangCode = "en"
         )
-        val anidbEid = getAnidbEid(syncMetaData, 1) ?: 0
+
+        val totalEps = data.totalEpisodes()
+        val anidbEidMap: Map<Int, Int> = (1..totalEps).associateWith { getAnidbEid(syncMetaData, it) ?: 0 }
+        val epMetaMap: Map<Int, MetaEpisode?> = (1..totalEps).associateWith { animeMetaData?.episodes?.get(it.toString()) }
+
+        val fallbackPoster = animeMetaData?.images?.firstOrNull()?.url ?: ""
+        val fallbackTitle = animeMetaData?.titles?.get("en")
+            ?: animeMetaData?.titles?.get("ja")
+            ?: animeMetaData?.titles?.get("x-jat")
+            ?: ""
+
+        fun resolveTitle(epData: MetaEpisode?): String {
+            val jsonTitle = epData?.title?.get("en")
+                ?: epData?.title?.get("ja")
+                ?: epData?.title?.get("x-jat")
+                ?: fallbackTitle
+            return jsonTitle.ifBlank { "Episode ${epData?.episode ?: ""}" }
+        }
+
+        val anidbEid = anidbEidMap[1] ?: 0
         val href = LinkData(
             malId = ids.idMal,
             aniId = ids.id,
@@ -198,21 +216,8 @@ class StreamPlayAnime : MainAPI() {
             episode = 1
         ).toStringData()
 
-        // --- Helper to get best episode title ---
-        fun resolveTitle(epData: MetaEpisode?): String {
-            val jsonTitle = epData?.title?.get("en")
-                ?: epData?.title?.get("ja")
-                ?: epData?.title?.get("x-jat")
-                ?: animeMetaData?.titles?.get("en")
-                ?: animeMetaData?.titles?.get("ja")
-                ?: animeMetaData?.titles?.get("x-jat")
-                ?: ""
-            return jsonTitle.ifBlank { "Episode ${epData?.episode ?: ""}" }
-        }
-
-        fun createEpisode(i: Int, isDub: Boolean): Episode {
-            val anidbEid = getAnidbEid(syncMetaData, i) ?: 0
-            val epData = animeMetaData?.episodes?.get(i.toString())
+        val episodes = (1..totalEps).map { i ->
+            val epData = epMetaMap[i]
             val linkData = LinkData(
                 malId = ids.idMal,
                 aniId = ids.id,
@@ -222,15 +227,15 @@ class StreamPlayAnime : MainAPI() {
                 season = 1,
                 episode = i,
                 isAnime = true,
-                isDub = isDub,
-                anidbEid = anidbEid
+                isDub = false,
+                anidbEid = anidbEidMap[i] ?: 0
             ).toStringData()
 
-            return newEpisode(linkData) {
+            newEpisode(linkData) {
                 this.season = 1
                 this.episode = i
                 this.name = resolveTitle(epData)
-                this.posterUrl = epData?.image ?: animeMetaData?.images?.firstOrNull()?.url ?: ""
+                this.posterUrl = epData?.image ?: fallbackPoster
                 this.description = epData?.overview ?: "No summary available"
                 this.score = Score.from10(epData?.rating)
                 this.runTime = epData?.runtime
@@ -238,21 +243,34 @@ class StreamPlayAnime : MainAPI() {
             }
         }
 
-        val episodes = (1..data.totalEpisodes()).map { createEpisode(it, false) }
-        val episodesDub = (1..data.totalEpisodes()).map { createEpisode(it, true) }
+        val episodesDub = episodes.mapIndexed { idx, ep ->
+            val i = idx + 1
+            val dubLinkData = LinkData(
+                malId = ids.idMal,
+                aniId = ids.id,
+                title = data.getTitle(),
+                jpTitle = jpTitle,
+                year = data.startDate.year,
+                season = 1,
+                episode = i,
+                isAnime = true,
+                isDub = true,
+                anidbEid = anidbEidMap[i] ?: 0
+            ).toStringData()
+            ep.copy(data = dubLinkData)  // reuse all metadata, only href differs
+        }
 
-        return if (data.format.contains("Movie",ignoreCase = true)) {
+        return if (data.format.contains("Movie", ignoreCase = true)) {
             newMovieLoadResponse(data.getTitle(), url, TvType.AnimeMovie, href) {
                 addAniListId(id.toInt())
                 addMalId(ids.idMal)
-                try { addKitsuId(kitsuid) } catch(_:Throwable){}
+                try { addKitsuId(kitsuid) } catch (_: Throwable) {}
                 this.year = data.startDate.year
                 this.plot = data.description
                 this.backgroundPosterUrl = backgroundUrl ?: animeMetaData?.images?.firstOrNull { it.coverType == "Fanart" }?.url ?: data.bannerImage
-                this.posterUrl =  posterurl ?: data.getCoverImage() ?: animeMetaData?.images
-                    ?.firstOrNull { it.coverType.equals("Poster", ignoreCase = true) }
-                    ?.url
-                try { this.logoUrl = logoUrl } catch(_:Throwable){}
+                this.posterUrl = posterurl ?: data.getCoverImage() ?: animeMetaData?.images
+                    ?.firstOrNull { it.coverType.equals("Poster", ignoreCase = true) }?.url
+                try { this.logoUrl = logoUrl } catch (_: Throwable) {}
                 this.tags = data.genres
                 this.score = Score.from100(data.averageScore)
             }
@@ -260,34 +278,29 @@ class StreamPlayAnime : MainAPI() {
             newAnimeLoadResponse(data.getTitle(), url, TvType.Anime) {
                 addAniListId(id.toInt())
                 addMalId(ids.idMal)
-                try { addKitsuId(kitsuid) } catch(_:Throwable){}
+                try { addKitsuId(kitsuid) } catch (_: Throwable) {}
                 addEpisodes(DubStatus.Subbed, episodes)
                 addEpisodes(DubStatus.Dubbed, episodesDub)
-                try { this.logoUrl = logoUrl } catch(_:Throwable){}
+                try { this.logoUrl = logoUrl } catch (_: Throwable) {}
                 this.year = data.startDate.year
                 this.plot = data.description
                 this.backgroundPosterUrl = animeMetaData?.images?.firstOrNull { it.coverType == "Fanart" }?.url ?: data.bannerImage
                 this.posterUrl = data.getCoverImage() ?: animeMetaData?.images
-                    ?.firstOrNull { it.coverType.equals("Poster", ignoreCase = true) }
-                    ?.url
+                    ?.firstOrNull { it.coverType.equals("Poster", ignoreCase = true) }?.url
                 this.tags = data.genres
                 this.score = Score.from100(data.averageScore)
                 this.showStatus = getStatus(data.status)
                 this.recommendations = data.recommendations?.edges
                     ?.mapNotNull { edge ->
                         val recommendation = edge.node.mediaRecommendation ?: return@mapNotNull null
-                        val title = recommendation.title?.english
-                            ?: recommendation.title?.romaji
-                            ?: "Unknown"
-                        val recommendationUrl = "$mainUrl/anime/${recommendation.id}"
-                        newAnimeSearchResponse(title, recommendationUrl, TvType.Anime).apply {
+                        val title = recommendation.title?.english ?: recommendation.title?.romaji ?: "Unknown"
+                        newAnimeSearchResponse(title, "$mainUrl/anime/${recommendation.id}", TvType.Anime).apply {
                             this.posterUrl = recommendation.coverImage?.large
                         }
                     }
             }
         }
     }
-
 
     override suspend fun loadLinks(
         data: String,

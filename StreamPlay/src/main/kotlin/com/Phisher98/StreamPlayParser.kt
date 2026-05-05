@@ -1031,3 +1031,24 @@ data class HiAnimeTrack(
     val kind: String?,
     val default: Boolean?
 )
+
+data class Moviesdrive(
+    val hits: List<Hit>,
+)
+
+data class Hit(
+    val url: String,
+)
+
+//vaplayer
+
+data class Vaplayer(
+    val data: VaplayerData,
+    @JsonProperty("default_subs")
+    val defaultSubs: List<Any?>,
+)
+
+data class VaplayerData(
+    @JsonProperty("stream_urls")
+    val streamUrls: List<String>,
+)

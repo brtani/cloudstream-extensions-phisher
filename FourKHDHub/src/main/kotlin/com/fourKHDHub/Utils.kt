@@ -66,7 +66,7 @@ suspend fun getRedirectLinks(url: String): String {
             .trim()
     }.getOrElse {
         Log.e("Error", "Error processing redirect: ${it.message}")
-        ""
+        url
     }
 }
 

@@ -1,10 +1,8 @@
 package com.phisher98
 
-import android.os.Build
 import androidx.annotation.RequiresApi
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.phisher98.StreamPlayExtractor.invokFlixindia
 import com.phisher98.StreamPlayExtractor.invoke2embed
 import com.phisher98.StreamPlayExtractor.invoke4khdhub
 import com.phisher98.StreamPlayExtractor.invokeAllMovieland
@@ -71,6 +69,7 @@ import com.phisher98.StreamPlayExtractor.invokevidrock
 import com.phisher98.StreamPlayExtractor.invokeTokyoInsider
 import com.phisher98.StreamPlayExtractor.invokeXpass
 import com.phisher98.StreamPlayExtractor.invokekuudere
+import com.phisher98.StreamPlayExtractor.invokevaplayer
 import com.phisher98.StreamPlayExtractor.resolveAnimeIds
 
 data class Provider(
@@ -189,7 +188,7 @@ private val providers by lazy {
             }
         },
         Provider("vidsrccc", "Vidsrccc") { res, _, callback, _, _ ->
-            if (!res.isAnime) if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!res.isAnime) {
                 invokeVidsrccc(res.id, res.season, res.episode, callback)
             }
         },
@@ -342,9 +341,6 @@ private val providers by lazy {
         Provider("HexaSU", "HexaSU") { res, _, callback, _, _ ->
             if (!res.isAnime) invokeHexa(res.id, res.season, res.episode, callback)
         },
-        Provider("flixindia", "FlixIndia") { res, subtitleCallback, callback, _, _ ->
-            if (!res.isAnime) invokFlixindia(res.title,res.year, res.season, res.episode, subtitleCallback, callback)
-        },
         Provider("Hindmoviez", "HindMoviez") { res, subtitleCallback, callback, _, _ ->
             if (!res.isAnime) invokeHindmoviez(res.imdbId, res.season, res.episode, subtitleCallback, callback)
         },
@@ -381,9 +377,11 @@ private val providers by lazy {
         },
         Provider("Xpass", "Xpass") { res, _, callback, _, _ ->
             if (!res.isAnime) invokeXpass(res.id, res.season, res.episode, callback, )
+        },
+        Provider("vaplayer", "Vaplayer") { res, _, callback, _, _ ->
+            if (!res.isAnime) invokevaplayer(res.id, res.season, res.episode, callback)
         }
     )
 }
 
-@RequiresApi(Build.VERSION_CODES.O)
 fun buildProviders(): List<Provider> = providers

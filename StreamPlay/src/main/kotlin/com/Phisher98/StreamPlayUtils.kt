@@ -74,12 +74,13 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.min
 import android.content.SharedPreferences
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.withContext
+import android.os.Build
+import androidx.annotation.RequiresApi
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.math.BigInteger
 import java.net.URLEncoder
-import kotlin.coroutines.cancellation.CancellationException
+import java.nio.charset.StandardCharsets
+import java.util.Base64
 
 val sharedPref: SharedPreferences? = null
 val appGlobalSemaphore = Semaphore(
@@ -1090,7 +1091,7 @@ suspend fun getM3u8Qualities(
 }
 
 
-suspend fun getRedirectLinks(url: String): String {
+suspend fun getRedirectLinks(url: String): String? {
     val doc = app.get(url).toString()
     val regex = "s\\('o','([A-Za-z0-9+/=]+)'|ck\\('_wp_http_\\d+','([^']+)'".toRegex()
     val combinedString = buildString {
@@ -1112,7 +1113,7 @@ suspend fun getRedirectLinks(url: String): String {
         encodedurl.ifEmpty { directlink }
     } catch (e: Exception) {
         Log.e("Error:", "Error processing links $e")
-        "" // Return an empty string on failure
+        url // Return url
     }
 }
 
@@ -2237,5 +2238,108 @@ fun cinemacityextractQuality(url: String): Int {
         url.contains("480p")  -> Qualities.P480.value
         url.contains("360p")  -> Qualities.P360.value
         else -> Qualities.Unknown.value
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+fun moviesdrivebase64Decode(input: String): String {
+    return try {
+        val normalized = input
+            .replace('-', '+')
+            .replace('_', '/')
+            .let {
+                when (it.length % 4) {
+                    2 -> "$it=="
+                    3 -> "$it="
+                    else -> it
+                }
+            }
+
+        val decoded = Base64.getDecoder().decode(normalized)
+        String(decoded, StandardCharsets.UTF_8)
+
+    } catch (_: Exception) {
+        ""
+    }
+}
+
+suspend fun getMoviesDriveMoviesStreamUrls(inputUrl: String): List<String> {
+    return try {
+        val uri = URI(inputUrl)
+        val params = uri.rawQuery
+            ?.split("&")
+            ?.mapNotNull {
+                val i = it.indexOf("=")
+                if (i == -1) null else it.substring(0, i) to it.substring(i + 1)
+            }
+            ?.toMap() ?: return emptyList()
+
+        val encodedQ = params["q"] ?: return emptyList()
+        val fromAc = params["from_ac"] ?: return emptyList()
+        val decodedQuery = moviesdrivebase64Decode(encodedQ)
+
+        val baseurl = getBaseUrl(inputUrl)
+        val apiUrl = "$baseurl/drive/search-recover.php".toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("api", "search")
+            .addQueryParameter("q", decodedQuery)
+            .addQueryParameter("page", "1")
+            .addQueryParameter("from_ac", fromAc)
+            .build()
+            .toString()
+
+        val responseText = app.get(apiUrl).text
+        val json = JSONObject(responseText)
+        val hits = json.getJSONArray("hits")
+
+        (0 until hits.length())
+            .mapNotNull { i ->
+                hits.getJSONObject(i).optString("url").takeIf { it.isNotBlank() }
+            }.distinct()
+
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+suspend fun getMoviesDriveSeriesStreamUrls(inputUrl: String): List<Pair<String, String>> {
+    return try {
+        val uri = URI(inputUrl)
+        val params = uri.rawQuery
+            ?.split("&")
+            ?.mapNotNull {
+                val i = it.indexOf("=")
+                if (i == -1) null else it.substring(0, i) to it.substring(i + 1)
+            }
+            ?.toMap() ?: return emptyList()
+
+        val encodedQ = params["q"] ?: return emptyList()
+        val fromAc = params["from_ac"] ?: return emptyList()
+        val decodedQuery = moviesdrivebase64Decode(encodedQ)
+
+        val baseurl = getBaseUrl(inputUrl)
+        val apiUrl = "$baseurl/drive/search-recover.php".toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("api", "search")
+            .addQueryParameter("q", decodedQuery)
+            .addQueryParameter("page", "1")
+            .addQueryParameter("from_ac", fromAc)
+            .build()
+            .toString()
+
+        val responseText = app.get(apiUrl).text
+        val json = JSONObject(responseText)
+        val hits = json.getJSONArray("hits")
+
+        (0 until hits.length())
+            .mapNotNull { i ->
+                val obj = hits.getJSONObject(i)
+                val fileName = obj.optString("file_name")
+                val url = obj.optString("url")
+                if (url.isBlank()) null else fileName to url
+            }.distinctBy { it.second }
+
+    } catch (_: Exception) {
+        emptyList()
     }
 }
